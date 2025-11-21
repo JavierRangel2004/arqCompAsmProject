@@ -81,6 +81,9 @@ exit_program:
     int 21h
 
 ; ---------- Subrutina: PrintStr ----------
+; Propósito: Imprime una cadena de caracteres terminada en '$' en la consola
+; Parámetros: DX = offset de la cadena a imprimir
+; Registros modificados: AH (09h), utiliza interrupción 21h
 PrintStr proc
     mov ah, 09h
     int 21h
@@ -88,6 +91,9 @@ PrintStr proc
 PrintStr endp
 
 ; ---------- Subrutina: PrintCRLF ----------
+; Propósito: Imprime un salto de línea (carriage return + line feed)
+; Parámetros: Ninguno
+; Registros modificados: DX, AH (09h), utiliza interrupción 21h
 PrintCRLF proc
     mov dx, offset crlf
     mov ah, 09h
@@ -98,7 +104,9 @@ PrintCRLF endp
 crlf db 13,10, "$"
 
 ; ---------- Subrutina: ReadLine (usa buffer DOS) ----------
-; DX = offset del buffer (pin_buffer o num_buffer)
+; Propósito: Lee una línea de texto desde el teclado usando buffer DOS (función 0Ah)
+; Parámetros: DX = offset del buffer estructurado (primer byte = tamaño máximo)
+; Registros modificados: AH (0Ah), utiliza interrupción 21h. El buffer se modifica con la entrada del usuario
 ReadLine proc
     mov ah, 0Ah
     int 21h
@@ -106,7 +114,9 @@ ReadLine proc
 ReadLine endp
 
 ; ---------- Subrutina: LoginPIN ----------
-; Devuelve ZF=1 si login OK, ZF=0 si fallo (3 intentos)
+; Propósito: Autentica al usuario solicitando PIN. Permite hasta 3 intentos
+; Parámetros: Ninguno (usa variables globales: pin_buffer, CorrectPIN)
+; Registros modificados: AX, CX, SI, DI, BX, AL, ZF. Retorna ZF=1 si login exitoso, ZF=0 si falló
 LoginPIN proc
     mov cx, 3          ; intentos
 
@@ -154,6 +164,9 @@ pin_fail:
 LoginPIN endp
 
 ; ---------- Subrutina: MenuPrincipal ----------
+; Propósito: Muestra el menú principal y procesa la opción seleccionada por el usuario
+; Parámetros: Ninguno (lee entrada del teclado)
+; Registros modificados: DX, AH, AL. Modifica end_flag si se selecciona salir
 MenuPrincipal proc
     mov dx, offset msgMenu
     call PrintStr
@@ -195,6 +208,9 @@ opcion4:
 MenuPrincipal endp
 
 ; ---------- ConsultarSaldo ----------
+; Propósito: Muestra el saldo actual de la cuenta en pantalla
+; Parámetros: Ninguno (lee Balance desde variable global)
+; Registros modificados: DX, AX, DI. Utiliza out_buffer para formatear el número
 ConsultarSaldo proc
     mov dx, offset msgSaldo
     call PrintStr
@@ -219,6 +235,9 @@ ConsultarSaldo endp
 msgContinuar db 13,10, "Presiona cualquier tecla para continuar...$"
 
 ; ---------- Depositar ----------
+; Propósito: Permite al usuario depositar una cantidad de dinero en su cuenta
+; Parámetros: Ninguno (lee cantidad desde num_buffer usando ReadLine)
+; Registros modificados: DX, CL, SI, AX, AH. Modifica Balance (variable global)
 Depositar proc
     mov dx, offset msgDeposito
     call PrintStr
@@ -256,6 +275,9 @@ dep_error:
 Depositar endp
 
 ; ---------- Retirar ----------
+; Propósito: Permite al usuario retirar una cantidad de dinero de su cuenta (valida fondos suficientes)
+; Parámetros: Ninguno (lee cantidad desde num_buffer usando ReadLine)
+; Registros modificados: DX, CL, SI, AX, BX, AH. Modifica Balance (variable global)
 Retirar proc
     mov dx, offset msgRetiro
     call PrintStr
@@ -304,8 +326,9 @@ ret_error:
 Retirar endp
 
 ; ---------- StrToInt ----------
-; Entrada: SI = offset primeros dígitos, CL = longitud
-; Salida: AX = valor, CF=1 si error, CF=0 si OK
+; Propósito: Convierte una cadena de dígitos ASCII a su valor numérico entero (16 bits)
+; Parámetros: SI = offset del primer dígito de la cadena, CL = longitud de la cadena
+; Registros modificados: AX, BX, DX, CX (preservados con push/pop). Retorna AX = valor numérico, CF=1 si error, CF=0 si OK
 StrToInt proc
     push bx
     push dx
@@ -353,8 +376,9 @@ stoi_error:
 StrToInt endp
 
 ; ---------- IntToStr ----------
-; Entrada: AX = valor, DI = buffer de salida
-; Salida: numero en ASCII terminado en '$' en el buffer
+; Propósito: Convierte un número entero (16 bits) a su representación en cadena ASCII
+; Parámetros: AX = valor numérico a convertir, DI = offset del buffer de salida
+; Registros modificados: AX, BX, CX, DX, SI, DI (preservados con push/pop). El buffer apuntado por DI se modifica con el resultado
 IntToStr proc
     push ax
     push bx
