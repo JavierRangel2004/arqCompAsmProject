@@ -22,28 +22,31 @@ msgAdios        db  13,10, "Gracias por usar Banco Ensamblador.", 13,10, "$"
 msgInvalido     db  13,10, "Entrada invalida.", 13,10, "$"
 msgOk           db  13,10, "Operacion realizada correctamente.", 13,10, "$"
 msgOverflow     db  13,10, "Error: cantidad excede el limite permitido.", 13,10, "$"
+msgContinuar    db  13,10, "Presiona cualquier tecla para continuar...$"
 
 CorrectPIN      db  "1234"      ; PIN correcto (4 bytes)
 Balance         dw  1000        ; saldo inicial: 1000
 
-; Buffer DOS para leer PIN (funci�n 0Ah)
+; Buffer DOS para leer PIN (función 0Ah)
 ; Estructura: [0]=max, [1]=longitud real, [2..]=datos
 pin_buffer      db  5           ; max 5 chars (4 + Enter)
 pin_len         db  ?           ; longitud real introducida
-pin_data        db  5 dup(?)    ; aqu� se almacenan los caracteres
+pin_data        db  5 dup(?)    ; aquí se almacenan los caracteres
 
 ; Buffer para cantidades
 num_buffer      db  6           ; max 6 chars (hasta 65535)
 num_len         db  ?
 num_data        db  6 dup(?)
 
-; Buffer para imprimir n�meros (resultado de IntToStr)
-out_buffer      db  6 dup('$')  ; terminaremos con '$'
+; Buffer para imprimir números
+out_buffer      db  6 dup('$')  ; hasta 5 dígitos + '$'
 
-; Bandera para salir del men�
+; Bandera para salir del menú
 end_flag        db  0           ; 0 = seguir en menu, 1 = salir
 
-; ========= C�DIGO =========
+crlf            db  13,10, "$"
+
+; ========= CÓDIGO =========
 start:
     ; Limpiar pantalla
     call limpiar
@@ -66,7 +69,7 @@ login_ok:
     call PrintStr
     call PrintCRLF
     
-    ; Esperar tecla antes de mostrar el men
+    ; Esperar tecla antes de mostrar el menú
     mov ah, 00h
     int 16h
     call limpiar
@@ -92,9 +95,7 @@ exit_program:
     int 21h
 
 ; ---------- Subrutina: PrintStr ----------
-; Prop�sito: Imprime una cadena de caracteres terminada en '$' en la consola
-; Par�metros: DX = offset de la cadena a imprimir
-; Registros modificados: AH (09h), utiliza interrupci�n 21h
+; DX = offset de la cadena terminada en '$'
 PrintStr proc
     mov ah, 09h
     int 21h
@@ -102,9 +103,6 @@ PrintStr proc
 PrintStr endp
 
 ; ---------- Subrutina: PrintCRLF ----------
-; Prop�sito: Imprime un salto de l�nea (carriage return + line feed)
-; Par�metros: Ninguno
-; Registros modificados: DX, AH (09h), utiliza interrupci�n 21h
 PrintCRLF proc
     mov dx, offset crlf
     mov ah, 09h
@@ -112,12 +110,8 @@ PrintCRLF proc
     ret
 PrintCRLF endp
 
-crlf db 13,10, "$"
-
-; ---------- Subrutina: ReadLine (usa buffer DOS) ----------
-; Prop�sito: Lee una l�nea de texto desde el teclado usando buffer DOS (funci�n 0Ah)
-; Par�metros: DX = offset del buffer estructurado (primer byte = tama�o m�ximo)
-; Registros modificados: AH (0Ah), utiliza interrupci�n 21h. El buffer se modifica con la entrada del usuario
+; ---------- Subrutina: ReadLine (usa buffer DOS 0Ah) ----------
+; DX = offset del buffer estructurado
 ReadLine proc
     mov ah, 0Ah
     int 21h
@@ -125,9 +119,7 @@ ReadLine proc
 ReadLine endp
 
 ; ---------- Subrutina: LoginPIN ----------
-; Prop�sito: Autentica al usuario solicitando PIN. Permite hasta 3 intentos
-; Par�metros: Ninguno (usa variables globales: pin_buffer, CorrectPIN)
-; Registros modificados: AX, CX, SI, DI, BX, AL, ZF. Retorna ZF=1 si login exitoso, ZF=0 si fall�
+; Retorna: ZF=1 si login exitoso, ZF=0 si falló
 LoginPIN proc
     mov cx, 3          ; intentos
 
@@ -156,8 +148,8 @@ cmp_loop:
     dec bx
     jnz cmp_loop
     
-    ; si llegamos aqu�, PIN correcto
-    ; ZF=1 para indicar �xito
+    ; si llegamos aquí, PIN correcto
+    ; ZF=1 para indicar éxito
     mov ax, 0
     cmp ax, 0          ; fuerza ZF=1 
     call limpiar
@@ -172,7 +164,6 @@ pin_fail:
     jmp login_loop
 
 login_final_fail:
-    
     ; fallaron los 3 intentos
     mov ax, 1
     cmp ax, 0          ; ZF=0
@@ -180,9 +171,6 @@ login_final_fail:
 LoginPIN endp
 
 ; ---------- Subrutina: MenuPrincipal ----------
-; Prop�sito: Muestra el men� principal y procesa la opci�n seleccionada por el usuario
-; Par�metros: Ninguno (lee entrada del teclado)
-; Registros modificados: DX, AH, AL. Modifica end_flag si se selecciona salir
 MenuPrincipal proc
     mov dx, offset msgMenu
     call PrintStr
@@ -191,7 +179,7 @@ MenuPrincipal proc
     mov ah, 01h
     int 21h            ; AL = tecla
     
-    ; Consumir el salto de lnea si el usuario presion Enter
+    ; Tratar Enter como inválido
     cmp al, 13         ; Enter (carriage return)
     je opcion_invalida
     cmp al, 10         ; Line feed
@@ -209,8 +197,7 @@ MenuPrincipal proc
 opcion_invalida:
     mov dx, offset msgInvalido
     call PrintStr
-    call PrintCRLF     ; salto de l�nea despu�s de leer
-    
+    call PrintCRLF
     ret
 
 opcion1:
@@ -232,9 +219,6 @@ opcion4:
 MenuPrincipal endp
 
 ; ---------- ConsultarSaldo ----------
-; Prop�sito: Muestra el saldo actual de la cuenta en pantalla
-; Par�metros: Ninguno (lee Balance desde variable global)
-; Registros modificados: DX, AX, DI. Utiliza out_buffer para formatear el n�mero
 ConsultarSaldo proc
     mov dx, offset msgSaldo
     call PrintStr
@@ -258,12 +242,7 @@ ConsultarSaldo proc
     ret
 ConsultarSaldo endp
 
-msgContinuar db 13,10, "Presiona cualquier tecla para continuar...$"
-
 ; ---------- Depositar ----------
-; Prop�sito: Permite al usuario depositar una cantidad de dinero en su cuenta
-; Par�metros: Ninguno (lee cantidad desde num_buffer usando ReadLine)
-; Registros modificados: DX, CL, SI, AX, AH. Modifica Balance (variable global)
 Depositar proc
     mov dx, offset msgDeposito
     call PrintStr
@@ -319,9 +298,6 @@ dep_error:
 Depositar endp
 
 ; ---------- Retirar ----------
-; Prop�sito: Permite al usuario retirar una cantidad de dinero de su cuenta (valida fondos suficientes)
-; Par�metros: Ninguno (lee cantidad desde num_buffer usando ReadLine)
-; Registros modificados: DX, CL, SI, AX, BX, AH. Modifica Balance (variable global)
 Retirar proc
     mov dx, offset msgRetiro
     call PrintStr
@@ -374,9 +350,8 @@ ret_error:
 Retirar endp
 
 ; ---------- StrToInt ----------
-; Prop�sito: Convierte una cadena de d�gitos ASCII a su valor num�rico entero (16 bits)
-; Par�metros: SI = offset del primer d�gito de la cadena, CL = longitud de la cadena
-; Registros modificados: AX, BX, DX, CX (preservados con push/pop). Retorna AX = valor num�rico, CF=1 si error, CF=0 si OK
+; SI = offset primer dígito, CL = longitud
+; Retorna AX = valor, CF=1 si error / overflow
 StrToInt proc
     push bx
     push dx
@@ -393,22 +368,20 @@ stoi_loop:
     cmp bl, '9'
     ja stoi_error
     
-    sub bl, '0'        ; ahora BL = valor num�rico (0-9)
+    sub bl, '0'        ; ahora BL = valor numérico (0-9)
     mov bh, 0          ; extender a 16 bits
     
-    ; Validar desbordamiento antes de multiplicar
-    ; Si AX > 6553, entonces AX * 10 > 65535 (desbordamiento)
+    ; Validar desbordamiento antes de multiplicar (AX * 10)
     cmp ax, 6553
     ja stoi_error
     
     ; AX = AX * 10
     mov dx, ax
     shl ax, 1          ; AX = AX*2
-    shl dx, 3          ; DX = AX*8 (usando copia)
+    shl dx, 3          ; DX = AX*8 (copia)
     add ax, dx         ; AX = AX*10
     
     ; Validar desbordamiento antes de sumar
-    ; Si AX > 65535 - BX, entonces AX + BX > 65535
     mov dx, 65535
     sub dx, bx
     cmp ax, dx
@@ -436,64 +409,48 @@ stoi_error:
 StrToInt endp
 
 ; ---------- IntToStr ----------
-; Prop�sito: Convierte un n�mero entero (16 bits) a su representaci�n en cadena ASCII
-; Par�metros: AX = valor num�rico a convertir, DI = offset del buffer de salida
-; Registros modificados: AX, BX, CX, DX, SI, DI (preservados con push/pop). El buffer apuntado por DI se modifica con el resultado
+; AX = valor numérico a convertir
+; DI = buffer destino (ej. out_buffer)
+; Escribe cadena terminada en '$'
 IntToStr proc
     push ax
     push bx
     push cx
     push dx
     push si
-    
-    ; Buffer temporal para construir el n�mero al rev�s
-    mov si, offset out_buffer
-    add si, 5          ; empezar desde el final del buffer
-    mov byte ptr [si], '$'  ; terminar con $
-    dec si              ; posici�n para el �ltimo d�gito
-    
-    ; Si el n�mero es 0, caso especial
+
+    ; Caso especial: número 0
     cmp ax, 0
-    jne its_loop
-    mov byte ptr [si], '0'
-    ; Copiar al buffer final (usar DI original)
-    pop di              ; recuperar DI original
-    mov al, [si]
-    mov [di], al
+    jne its_not_zero
+    mov byte ptr [di], '0'
     mov byte ptr [di+1], '$'
     jmp its_done
 
-its_loop:
-    cmp ax, 0
-    je its_copiar
-    
+its_not_zero:
+    mov cx, 0          ; contador de dígitos
+
+its_divloop:
     mov dx, 0
     mov bx, 10
     div bx             ; AX = AX/10, DX = resto (0-9)
-    
-    add dl, '0'        ; convertir resto a ASCII
-    mov [si], dl       ; guardar d�gito (al rev�s)
-    dec si
-    
-    jmp its_loop
 
-its_copiar:
-    ; Los d�gitos est�n al rev�s, copiarlos al inicio del buffer
-    inc si              ; apuntar al primer d�gito guardado
-    mov di, offset out_buffer
-    
-its_copy:
-    mov al, [si]
-    cmp al, '$'
-    je its_done
-    mov [di], al
-    inc si
+    push dx            ; guardar resto en la pila
+    inc cx             ; aumentar número de dígitos
+
+    cmp ax, 0
+    jne its_divloop
+
+    ; ahora CX = número de dígitos
+its_poploop:
+    pop dx
+    add dl, '0'        ; convertir resto a ASCII
+    mov [di], dl
     inc di
-    jmp its_copy
+    loop its_poploop
+
+    mov byte ptr [di], '$'
 
 its_done:
-    mov byte ptr [di], '$'  ; asegurar terminaci�n con $
-    
     pop si
     pop dx
     pop cx
@@ -501,3 +458,5 @@ its_done:
     pop ax
     ret
 IntToStr endp
+
+end start
